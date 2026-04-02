@@ -121,7 +121,6 @@ export let artModeZoomOutEnabled = true;  // ON by default - set to false to dis
 // ========== RECOGNISER FAIL / INTERVAL MODE STATE ==========
 export let fadeOnRecogniserFail = true;      // Feature enabled
 export let fadeOnRecogniserFailCount = 2;    // Consecutive failures before fading
-export let recogniserFailCounter = 0;        // Current consecutive fail count
 export let intervalModeActive = false;       // Whether interval mode is showing
 
 // ========== BACKGROUND STATE ==========
@@ -201,7 +200,6 @@ export function setWordSyncTransitionMs(value) { wordSyncTransitionMs = value; }
 // Recogniser fail / interval mode setters
 export function setFadeOnRecogniserFail(value) { fadeOnRecogniserFail = value; }
 export function setFadeOnRecogniserFailCount(value) { fadeOnRecogniserFailCount = value; }
-export function setRecogniserFailCounter(value) { recogniserFailCounter = value; }
 export function setIntervalModeActive(value) { intervalModeActive = value; }
 
 // Debug overlay setters

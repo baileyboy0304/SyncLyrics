@@ -29,7 +29,6 @@ import {
     slideshowInterval,
     fadeOnRecogniserFail,
     fadeOnRecogniserFailCount,
-    recogniserFailCounter,
     intervalModeActive,
     setLastTrackInfo,
     setLastCheckTime,
@@ -39,7 +38,6 @@ import {
     setManualVisualModeOverride,
     setWordSyncEnabled,
     setDebugTimingEnabled,
-    setRecogniserFailCounter,
     setIntervalModeActive
 } from './modules/state.js';
 
@@ -47,7 +45,7 @@ import {
 import { normalizeTrackId, sleep, areLyricsDifferent } from './modules/utils.js';
 
 // API (Level 1)
-import { getConfig, getCurrentTrack, getLyrics, fetchArtistImages, fetchQueue } from './modules/api.js';
+import { getConfig, getCurrentTrack, getLyrics, fetchArtistImages, fetchQueue, getAudioRecognitionStatus } from './modules/api.js';
 
 // DOM (Level 1)
 import { setLyricsInDom, updateThemeColor } from './modules/dom.js';
@@ -411,7 +409,6 @@ function exitIntervalMode() {
     if (!intervalModeActive) return;
     console.log('[Main] Exiting interval mode (recognition restored)');
     setIntervalModeActive(false);
-    setRecogniserFailCounter(0);
 
     document.body.classList.remove('interval-mode');
 }
@@ -497,17 +494,6 @@ async function updateLoop() {
                 idleStartTime = Date.now();
             }
 
-            // Recogniser fail detection: if we had a track playing (lastTrackId set),
-            // count consecutive failures. After threshold, enter interval mode.
-            if (fadeOnRecogniserFail && lastTrackId) {
-                const newCount = recogniserFailCounter + 1;
-                setRecogniserFailCounter(newCount);
-                console.log(`[Main] Recogniser fail ${newCount}/${fadeOnRecogniserFailCount}`);
-                if (newCount >= fadeOnRecogniserFailCount && !intervalModeActive) {
-                    enterIntervalMode();
-                }
-            }
-
             if (isIdleState && idleStartTime && (Date.now() - idleStartTime > IDLE_THRESHOLD)) {
                 currentPollInterval = IDLE_POLL_INTERVAL;
             }
@@ -523,12 +509,28 @@ async function updateLoop() {
             currentPollInterval = updateInterval;
         }
 
-        // Exit interval mode if recognition succeeds
-        if (intervalModeActive) {
-            exitIntervalMode();
+        // ========== RECOGNISER FAIL / INTERVAL MODE ==========
+        // When audio recognition is the active source, check for consecutive
+        // no-match results (e.g. radio switches to adverts/news).
+        if (fadeOnRecogniserFail) {
+            try {
+                const recStatus = await getAudioRecognitionStatus();
+                if (recStatus && recStatus.active) {
+                    const noMatchCount = recStatus.consecutive_no_match || 0;
+                    if (noMatchCount >= fadeOnRecogniserFailCount && !intervalModeActive) {
+                        console.log(`[Main] Recogniser no-match ${noMatchCount}>=${fadeOnRecogniserFailCount}, entering interval mode`);
+                        enterIntervalMode();
+                    } else if (noMatchCount === 0 && intervalModeActive) {
+                        exitIntervalMode();
+                    }
+                } else if (intervalModeActive) {
+                    // Audio recognition no longer active, exit interval mode
+                    exitIntervalMode();
+                }
+            } catch (e) {
+                // Audio recognition not available, ignore
+            }
         }
-        // Reset fail counter on successful recognition
-        setRecogniserFailCounter(0);
 
         // Get track ID
         let trackId;
