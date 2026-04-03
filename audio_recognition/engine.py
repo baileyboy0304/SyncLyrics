@@ -700,33 +700,7 @@ class RecognitionEngine:
         song_changed = not result.is_same_song(self._last_result)
         
         if not song_changed:
-            # Same song - update position only if the new offset is plausible.
-            # Shazam can return out-of-order offsets for the same audio segment,
-            # causing lyrics to jump backwards then forwards.  We reject any
-            # result whose estimated current position would move backwards or
-            # leap too far ahead compared to where playback should be based on
-            # the previous result and elapsed wall-clock time.
-            if self._last_result is not None:
-                expected_pos = self._last_result.get_current_position()
-                new_pos = result.get_current_position()
-                drift = new_pos - expected_pos
-
-                # Allow small backward drift (timing jitter) but reject large jumps
-                if drift < -3.0:
-                    logger.debug(
-                        f"Rejected backward offset: new={new_pos:.1f}s, "
-                        f"expected={expected_pos:.1f}s, drift={drift:.1f}s"
-                    )
-                    self._set_state(EngineState.ACTIVE)
-                    return
-                if drift > 30.0:
-                    logger.debug(
-                        f"Rejected forward jump: new={new_pos:.1f}s, "
-                        f"expected={expected_pos:.1f}s, drift={drift:.1f}s"
-                    )
-                    self._set_state(EngineState.ACTIVE)
-                    return
-
+            # Same song - just update position and state
             self._last_result = result
             self._set_state(EngineState.ACTIVE)
             
