@@ -61,6 +61,14 @@ export function disablePixelScroll() {
 }
 
 /**
+ * Check if pixel scroll is enabled (regardless of whether lyrics have loaded).
+ * Use this to gate feeding lyrics data into the module.
+ */
+export function isPixelScrollEnabled() {
+    return _enabled;
+}
+
+/**
  * Check if pixel scroll is currently enabled and has rendered lyrics.
  * Returns false until lyrics are actually rendered, so the 6-slot
  * system remains active during initial load.

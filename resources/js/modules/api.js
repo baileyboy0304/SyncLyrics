@@ -43,7 +43,7 @@ import {
     debugBadSamples
 } from './state.js';
 import { isLatencyBeingAdjusted } from './latency.js';
-import { enablePixelScroll, disablePixelScroll, setScrollSpeed, init as initPixelScroll, updateLyrics as updatePixelScrollLyrics, updateWordSync as updatePixelScrollWordSync, isPixelScrollActive, setPositionAnchor as setPixelScrollPosition } from './pixelScroll.js';
+import { enablePixelScroll, disablePixelScroll, setScrollSpeed, init as initPixelScroll, updateLyrics as updatePixelScrollLyrics, updateWordSync as updatePixelScrollWordSync, isPixelScrollEnabled, isPixelScrollActive, setPositionAnchor as setPixelScrollPosition } from './pixelScroll.js';
 
 // RTT smoothing constant (EMA factor)
 const RTT_SMOOTHING = 0.3;
@@ -404,7 +404,9 @@ export async function getLyrics(updateBackgroundFn, updateThemeColorFn, updatePr
         setInstrumentalMarkers(data.instrumental_markers);
 
         // Feed pixel scroll module with all lyrics data
-        if (isPixelScrollActive() && data.all_lyrics) {
+        // Use isPixelScrollEnabled() (not Active) to avoid chicken-and-egg:
+        // Active requires lyrics loaded, but lyrics load is gated here
+        if (isPixelScrollEnabled() && data.all_lyrics) {
             // Use first+last line text as song key for change detection
             const first = data.all_lyrics[0] || {};
             const last = data.all_lyrics[data.all_lyrics.length - 1] || {};
