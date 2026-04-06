@@ -87,10 +87,14 @@ export function setScrollSpeed(speedMs) {
  * @param {string} songKey - Unique song identifier (artist-title)
  */
 export function updateLyrics(allLyrics, songKey) {
-    if (!_enabled || !allLyrics || allLyrics.length === 0) return;
+    if (!_enabled || !allLyrics || allLyrics.length === 0) {
+        console.log(`[PixelScroll] updateLyrics: skipped (enabled=${_enabled}, lines=${allLyrics?.length || 0})`);
+        return;
+    }
 
     // Re-render if song changed
     if (songKey !== _lastSongKey) {
+        console.log(`[PixelScroll] updateLyrics: new song, rendering ${allLyrics.length} lines, anchorSet=${_anchorSet}`);
         _lastSongKey = songKey;
         _displayLines = allLyrics;
         _activeLyricIndex = -1;
@@ -187,6 +191,8 @@ export function setPositionAnchor(position, isPlaying) {
     _anchorSet = true;
     _isPlaying = isPlaying;
 
+    console.log(`[PixelScroll] setPositionAnchor: pos=${position.toFixed(2)}s, playing=${isPlaying}, wasSet=${wasSet}, lines=${_displayLines.length}`);
+
     // On first anchor with rendered lines, immediately calculate correct target
     // so the lerp doesn't start from a stale initial position
     if (!wasSet && _container && _content && _displayLines.length > 0) {
@@ -211,11 +217,18 @@ export function setPositionAnchor(position, isPlaying) {
  * Starts the internal rAF loop.
  */
 export function init() {
-    if (!_enabled) return;
+    if (!_enabled) {
+        console.log('[PixelScroll] init: not enabled, skipping');
+        return;
+    }
     _container = document.getElementById('lyrics');
-    if (!_container) return;
+    if (!_container) {
+        console.log('[PixelScroll] init: #lyrics container not found');
+        return;
+    }
     _ensureContentDiv();
     _startLoop();
+    console.log(`[PixelScroll] init: loop started, container=${_container.clientWidth}x${_container.clientHeight}, lerpFactor=${_lerpFactor}`);
 }
 
 /**

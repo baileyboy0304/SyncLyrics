@@ -324,12 +324,17 @@ input[type="range"] {
 #lyrics.pixel-scroll {
     overflow: hidden;
     position: relative;
+    /* Override flex centering - translateY controls positioning */
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
 }
 
 /* The inner scrolling strip (created by pixelScroll.js) */
 #lyrics.pixel-scroll .pixel-scroll-content {
     text-align: center;
     padding: 0 1rem;
+    width: 100%;
     will-change: transform;
 }
 
