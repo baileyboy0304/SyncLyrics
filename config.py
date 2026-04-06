@@ -495,8 +495,10 @@ UDP_AUDIO = {
     "jitter_buffer_ms": _safe_int(os.getenv("UDP_JITTER_BUFFER_MS") or conf("udp_audio.jitter_buffer_ms"), 60),
     # Position locking: lock to the first recognition's offset to prevent chorus-confusion drift
     "lock_position": _safe_bool(os.getenv("UDP_LOCK_POSITION") or conf("udp_audio.lock_position"), True),
-    # Number of recognition events before position is locked (allows initial settling)
-    "lock_position_after": _safe_int(os.getenv("UDP_LOCK_POSITION_AFTER") or conf("udp_audio.lock_position_after"), 2),
+    # Number of consecutive consensus events before position is locked
+    "lock_position_after": _safe_int(os.getenv("UDP_LOCK_POSITION_AFTER") or conf("udp_audio.lock_position_after"), 3),
+    # Maximum difference (seconds) between consecutive sync anchors for consensus
+    "lock_consensus_tolerance": float(os.getenv("UDP_LOCK_CONSENSUS_TOLERANCE") or conf("udp_audio.lock_consensus_tolerance") or 3.0),
 }
 
 # Multi-Match Position Verification
