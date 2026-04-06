@@ -145,6 +145,8 @@ class RecognitionEngine:
         # Subsequent recognitions confirm it's still playing but do NOT update
         # position (prevents chorus-confusion offset jumps)
         self._position_lock_count: int = 0  # How many same-song recognitions so far
+        self._lock_anchors: list = []  # Sync anchors (offset - capture_start) for consensus checking
+        self._consecutive_good: int = 0  # Consecutive samples in consensus
         
         # Rolling audio buffer for improved recognition accuracy
         # Accumulates multiple capture cycles to provide longer audio samples
@@ -710,22 +712,48 @@ class RecognitionEngine:
         if not song_changed:
             # Check position lock settings
             lock_enabled = get_effective_value("udp_audio.lock_position", True)
-            lock_after = get_effective_value("udp_audio.lock_position_after", 2)
+            lock_after = get_effective_value("udp_audio.lock_position_after", 3)
+            lock_tolerance = get_effective_value("udp_audio.lock_consensus_tolerance", 3.0)
 
             self._position_lock_count += 1
 
-            if lock_enabled and self._position_lock_count > lock_after:
+            if lock_enabled and self._consecutive_good >= lock_after:
                 # Position is locked - do NOT update _last_result
                 self._log_recognition(result, "POSITION IGNORED")
             else:
-                # Still within the settling window or lock disabled - update position
-                self._last_result = result
                 if lock_enabled:
-                    if self._position_lock_count == lock_after:
-                        self._log_recognition(result, f"POSITION LOCKING ({self._position_lock_count} of {lock_after}) - LOCKED")
+                    # Compute sync anchor: the invariant that should be consistent
+                    # across samples if they agree on song position timeline
+                    sync_anchor = result.offset - result.capture_start_time
+                    self._lock_anchors.append(sync_anchor)
+
+                    # Check consensus with previous anchor
+                    if len(self._lock_anchors) >= 2:
+                        prev_anchor = self._lock_anchors[-2]
+                        if abs(sync_anchor - prev_anchor) <= lock_tolerance:
+                            self._consecutive_good += 1
+                        else:
+                            # Outlier detected - reset consecutive count
+                            # Keep this sample as potential start of new streak
+                            self._consecutive_good = 1
+                            logger.info(
+                                f"Sync consensus broken: anchor delta "
+                                f"{abs(sync_anchor - prev_anchor):.1f}s > "
+                                f"{lock_tolerance:.1f}s tolerance - resetting streak"
+                            )
                     else:
-                        self._log_recognition(result, f"POSITION LOCKING ({self._position_lock_count} of {lock_after})")
+                        # First sample
+                        self._consecutive_good = 1
+
+                    if self._consecutive_good >= lock_after:
+                        self._last_result = result
+                        self._log_recognition(result, f"POSITION LOCKING ({self._consecutive_good} of {lock_after}) - LOCKED")
+                    else:
+                        self._last_result = result
+                        self._log_recognition(result, f"POSITION LOCKING ({self._consecutive_good} of {lock_after})")
                 else:
+                    # Lock disabled - always update position
+                    self._last_result = result
                     self._log_recognition(result, "POSITION UPDATE")
 
             self._set_state(EngineState.ACTIVE)
@@ -975,8 +1003,10 @@ class RecognitionEngine:
         """
         logger.info(f"Song changed to: {result}")
 
-        # Reset position lock counter for the new song
+        # Reset position lock counter and consensus state for the new song
         self._position_lock_count = 0
+        self._lock_anchors = []
+        self._consecutive_good = 0
         self._log_recognition(result, "POSITION LOCKED")
 
         # Reset to verification state for new song
