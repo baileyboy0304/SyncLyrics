@@ -41,6 +41,7 @@ let _wordSyncActive = false;
 let _wordSyncedLyrics = null;    // Word-synced lyrics data from API
 let _cachedWordLineId = null;    // Track which line has word spans
 let _wordElements = [];          // Cached word span elements
+let _matchedWordLineData = null; // The timestamp-matched word-sync line for the active line
 
 // ========== PUBLIC API ==========
 
@@ -108,6 +109,7 @@ export function updateLyrics(allLyrics, songKey) {
         _activeLyricIndex = -1;
         _cachedWordLineId = null;
         _wordElements = [];
+        _matchedWordLineData = null;
         _renderLines();
     }
 }
@@ -199,7 +201,10 @@ export function setPositionAnchor(position, isPlaying) {
     _anchorSet = true;
     _isPlaying = isPlaying;
 
-    console.log(`[PixelScroll] setPositionAnchor: pos=${position.toFixed(2)}s, playing=${isPlaying}, wasSet=${wasSet}, lines=${_displayLines.length}`);
+    // Only log on first anchor (avoid spamming every 100ms poll)
+    if (!wasSet) {
+        console.log(`[PixelScroll] setPositionAnchor: first anchor pos=${position.toFixed(2)}s, playing=${isPlaying}, lines=${_displayLines.length}`);
+    }
 
     // On first anchor with rendered lines, immediately calculate correct target
     // so the lerp doesn't start from a stale initial position
@@ -248,6 +253,7 @@ export function reset() {
     _displayLines = [];
     _cachedWordLineId = null;
     _wordElements = [];
+    _matchedWordLineData = null;
     if (_content) {
         _content.innerHTML = '';
     }
@@ -353,6 +359,7 @@ function _destroy() {
     _anchorSet = false;
     _cachedWordLineId = null;
     _wordElements = [];
+    _matchedWordLineData = null;
 }
 
 /**
@@ -379,6 +386,11 @@ function _renderLines() {
     _content.querySelectorAll('[data-line-index]').forEach(el => {
         _lineElements[parseInt(el.dataset.lineIndex)] = el;
     });
+
+    // Apply initial visibility: hide all lines until playback reaches them
+    for (const [idx, el] of Object.entries(_lineElements)) {
+        el.classList.add('ps-hidden');
+    }
 
     // Set initial position: anchor first line at 35% of container
     if (_lineElements[0]) {
@@ -409,16 +421,32 @@ function _renderLines() {
 
 /**
  * Inject word-sync spans into the active line for karaoke highlighting.
+ * Matches by timestamp, not array index, because word-sync and line-sync
+ * data come from different providers with different line counts.
  */
 function _injectWordSpans(lineIndex) {
-    if (!_wordSyncedLyrics || lineIndex < 0 || lineIndex >= _wordSyncedLyrics.length) return;
+    if (!_wordSyncedLyrics || lineIndex < 0 || lineIndex >= _displayLines.length) return;
 
-    const lineData = _wordSyncedLyrics[lineIndex];
-    if (!lineData || !lineData.words || lineData.words.length === 0) return;
+    // Match word-sync line by closest timestamp, not by index
+    const lineTimeMs = Math.round(_displayLines[lineIndex].time * 1000);
+    let lineData = null;
+    let bestDiff = Infinity;
+    for (let i = 0; i < _wordSyncedLyrics.length; i++) {
+        const wsLine = _wordSyncedLyrics[i];
+        const wsTimeMs = Math.round((wsLine.start || 0) * 1000);
+        const diff = Math.abs(wsTimeMs - lineTimeMs);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            lineData = wsLine;
+        }
+    }
+    // Only accept matches within 500ms
+    if (!lineData || bestDiff > 500 || !lineData.words || lineData.words.length === 0) return;
 
     const lineId = `${lineData.start}_${lineIndex}`;
     if (_cachedWordLineId === lineId) return; // Already injected
     _cachedWordLineId = lineId;
+    _matchedWordLineData = lineData;
 
     const el = _lineElements[lineIndex];
     if (!el) return;
@@ -451,9 +479,9 @@ function _injectWordSpans(lineIndex) {
  * Update per-word highlights based on playback position.
  */
 function _updateWordHighlights(position) {
-    if (!_wordSyncedLyrics || _activeLyricIndex < 0) return;
-    const lineData = _wordSyncedLyrics[_activeLyricIndex];
-    if (!lineData || !lineData.words) return;
+    if (!_matchedWordLineData || _activeLyricIndex < 0) return;
+    const lineData = _matchedWordLineData;
+    if (!lineData.words) return;
 
     const positionMs = position * 1000;
 
